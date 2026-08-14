@@ -1,0 +1,656 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera-Connected IR Follower</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #0f172a;
+            --panel: #ffffff;
+            --panel-soft: #f8fafc;
+            --accent: #3b82f6;
+            --accent-strong: #1d4ed8;
+            --success: #16a34a;
+            --warning: #f59e0b;
+            --danger: #dc2626;
+            --text: #0f172a;
+            --muted: #475569;
+            --radius: 1rem;
+            --shadow: 0 24px 80px rgba(15, 23, 42, 0.16);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top, #1e3a8a 0%, #0f172a 52%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .page-shell {
+            width: min(100%, 1200px);
+            display: grid;
+            grid-template-columns: 1.2fr 0.9fr;
+            gap: 1.5rem;
+            align-items: stretch;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.16);
+            border-radius: var(--radius);
+            padding: 1.75rem;
+            box-shadow: 0 40px 80px rgba(15, 23, 42, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            overflow: hidden;
+        }
+
+        .hero {
+            color: #eef2ff;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 2.5vw, 3rem);
+            line-height: 1.05;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.75;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+            margin-top: 1.25rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.18);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(16px);
+        }
+
+        .stat-card strong {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+            color: rgba(226, 232, 240, 0.85);
+        }
+
+        .stat-card .value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #111827;
+        }
+
+        .camera-panel {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .video-shell {
+            position: relative;
+            width: 100%;
+            border-radius: 1.5rem;
+            overflow: hidden;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: inset 0 0 45px rgba(59, 130, 246, 0.16);
+            min-height: 320px;
+        }
+
+        video,
+        canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .button,
+        .toggle-button {
+            appearance: none;
+            border: none;
+            border-radius: 0.95rem;
+            padding: 0.95rem 1.15rem;
+            font: inherit;
+            cursor: pointer;
+            transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .button {
+            background: rgba(59, 130, 246, 0.95);
+            color: white;
+            box-shadow: 0 18px 40px rgba(59, 130, 246, 0.22);
+            backdrop-filter: blur(12px);
+        }
+
+        .button:hover {
+            transform: translateY(-1px);
+            background: var(--accent-strong);
+        }
+
+        .toggle-button {
+            background: rgba(255, 255, 255, 0.16);
+            color: var(--text);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+
+        .toggle-button.active {
+            background: var(--accent);
+            color: white;
+            border-color: transparent;
+        }
+
+        .sensor-panel {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .sensor-panel h2 {
+            margin: 0;
+            font-size: 1.35rem;
+        }
+
+        .sensor-panel p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .sensor-panel .readout {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .field {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .field label {
+            font-size: 0.95rem;
+            color: var(--muted);
+        }
+
+        .field span {
+            display: inline-flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 1rem 1rem;
+            border-radius: 0.95rem;
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .field span.zero {
+            color: #6b7280;
+        }
+
+        .field span.present {
+            color: var(--success);
+        }
+
+        .motor-status {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .motor-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.85rem 1rem;
+            background: rgba(255, 255, 255, 0.16);
+            border-radius: 0.95rem;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .motor-label {
+            color: var(--muted);
+        }
+
+        .motor-value {
+            font-weight: 700;
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .error-text {
+            color: var(--danger);
+        }
+
+        @media (max-width: 980px) {
+            .page-shell {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .actions {
+                flex-direction: column;
+            }
+
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="page-shell">
+        <section class="panel hero">
+            <div>
+                <h1>Glassy IR-Style Camera Sensor</h1>
+                <p>Simulate a short-range IR sensor using your webcam. Place an object within about <strong>50 mm</strong> of the lens and the system will return an IR-style value between <strong>100</strong> and <strong>500</strong>. Out of range returns <strong>0</strong>.</p>
+            </div>
+
+            <div class="status-grid">
+                <div class="stat-card">
+                    <strong>IR Value</strong>
+                    <div class="value" id="irValue">0</div>
+                </div>
+                <div class="stat-card">
+                    <strong>Estimated Distance</strong>
+                    <div class="value" id="distanceLabel">No object</div>
+                </div>
+                <div class="stat-card">
+                    <strong>Object Presence</strong>
+                    <div class="value" id="presenceLabel">Absent</div>
+                </div>
+                <div class="stat-card">
+                    <strong>Camera Status</strong>
+                    <div class="value" id="cameraStatus">Not started</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel camera-panel">
+            <div class="video-shell">
+                <video id="cameraVideo" autoplay muted playsinline></video>
+                <canvas id="overlayCanvas" class="overlay"></canvas>
+            </div>
+
+            <div class="actions">
+                <button class="button" id="startCamera">Start Camera</button>
+                <button class="button" id="calibrateButton">Calibrate Background</button>
+                <button class="toggle-button" id="toggleFallback">Use Simulated Mode</button>
+            </div>
+
+            <div class="sensor-panel">
+                <h2>Live sensor feed</h2>
+                <p class="hint">If your browser blocks camera access on a local file, open this page from <strong>http://localhost</strong> or a secure origin. Calibrate the background with an empty view, then place an object within 50 mm for best IR-style detection.</p>
+                <div class="field">
+                    <label>Detected area</label>
+                    <span id="areaValue">0 px</span>
+                </div>
+                <div class="field">
+                    <label>Current threshold</label>
+                    <span id="thresholdValue">24</span>
+                </div>
+                <div class="field">
+                    <label>Last message</label>
+                    <span id="statusMessage" class="zero">Waiting for camera</span>
+                </div>
+            </div>
+
+            <div class="motor-status">
+                <div class="motor-row">
+                    <div class="motor-label">Motor 1</div>
+                    <div class="motor-value" id="motor1Status">OFF</div>
+                </div>
+                <div class="motor-row">
+                    <div class="motor-label">Motor 2</div>
+                    <div class="motor-value" id="motor2Status">OFF</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <canvas id="processingCanvas" style="display:none;"></canvas>
+
+    <script>
+        const video = document.getElementById('cameraVideo');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const processingCanvas = document.getElementById('processingCanvas');
+        const cameraStatus = document.getElementById('cameraStatus');
+        const irValueField = document.getElementById('irValue');
+        const distanceLabel = document.getElementById('distanceLabel');
+        const presenceLabel = document.getElementById('presenceLabel');
+        const areaValue = document.getElementById('areaValue');
+        const thresholdValue = document.getElementById('thresholdValue');
+        const statusMessage = document.getElementById('statusMessage');
+        const motor1Status = document.getElementById('motor1Status');
+        const motor2Status = document.getElementById('motor2Status');
+        const startCameraButton = document.getElementById('startCamera');
+        const calibrateButton = document.getElementById('calibrateButton');
+        const toggleFallbackButton = document.getElementById('toggleFallback');
+
+        let mediaStream = null;
+        let backgroundData = null;
+        let processingContext = null;
+        let overlayContext = null;
+        let isProcessing = false;
+        let objectPresent = false;
+        let fallbackMode = false;
+        let fallbackObjectVisible = false;
+        const frameWidth = 640;
+        const frameHeight = 480;
+        const diffThreshold = 28;
+        const sensorRangeMm = 50;
+        const minAreaForIR = 26000;
+        const maxAreaForIR = 52000;
+
+        const motorStatus = {
+            motor1: { direction: 'OFF', speed: 0 },
+            motor2: { direction: 'OFF', speed: 0 }
+        };
+
+        function setCameraStatus(text, type = '') {
+            cameraStatus.textContent = text;
+            cameraStatus.className = type;
+        }
+
+        function setStatusMessage(message, type = 'zero') {
+            statusMessage.textContent = message;
+            statusMessage.className = type;
+        }
+
+        function updateMotorUI() {
+            motor1Status.textContent = motorStatus.motor1.direction === 'OFF'
+                ? 'OFF'
+                : `${motorStatus.motor1.direction} ${motorStatus.motor1.speed}%`;
+            motor2Status.textContent = motorStatus.motor2.direction === 'OFF'
+                ? 'OFF'
+                : `${motorStatus.motor2.direction} ${motorStatus.motor2.speed}%`;
+        }
+
+        function motorOff(motorId) {
+            motorStatus[motorId.toLowerCase()].direction = 'OFF';
+            motorStatus[motorId.toLowerCase()].speed = 0;
+            updateMotorUI();
+        }
+
+        function motorOn(motorId, direction, speed) {
+            motorStatus[motorId.toLowerCase()].direction = direction;
+            motorStatus[motorId.toLowerCase()].speed = speed;
+            updateMotorUI();
+        }
+
+        function updateReadout(ir, area, bbox, distanceMm) {
+            irValueField.textContent = ir;
+            if (ir === 0) {
+                distanceLabel.textContent = 'Out of 50 mm range';
+                presenceLabel.textContent = 'Absent';
+                presenceLabel.className = 'value zero';
+                setStatusMessage('No object detected within the 50 mm IR zone. Showing 0.', 'zero');
+            } else {
+                presenceLabel.textContent = 'Present';
+                presenceLabel.className = 'value present';
+                distanceLabel.textContent = `≈ ${distanceMm} mm`;
+                setStatusMessage(`Object detected within 50 mm. IR reading: ${ir}.`, 'success');
+            }
+
+            areaValue.textContent = `${Math.round(area)} px`;
+            thresholdValue.textContent = diffThreshold;
+
+            if (ir > 0) {
+                motorOff('motor1');
+                motorOff('motor2');
+            } else {
+                motorOn('motor1', 'REVERSE', 91);
+                motorOn('motor2', 'REVERSE', 91);
+            }
+
+            drawBoundingBox(bbox);
+        }
+
+        function drawIRBeam() {
+            overlayContext.save();
+            overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            const centerX = overlayCanvas.width / 2;
+            overlayContext.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+            overlayContext.lineWidth = 2;
+            overlayContext.beginPath();
+            overlayContext.moveTo(centerX, 0);
+            overlayContext.lineTo(centerX, overlayCanvas.height);
+            overlayContext.stroke();
+            overlayContext.fillStyle = 'rgba(56, 189, 248, 0.10)';
+            overlayContext.fillRect(centerX - 40, 0, 80, overlayCanvas.height);
+            overlayContext.restore();
+        }
+
+        function drawBoundingBox(bbox) {
+            drawIRBeam();
+            if (!bbox || bbox.width === 0 || bbox.height === 0) {
+                return;
+            }
+            overlayContext.strokeStyle = 'rgba(59, 130, 246, 0.95)';
+            overlayContext.lineWidth = 3;
+            overlayContext.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+        }
+
+        function getGrayscale(data, index) {
+            return 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+        }
+
+        function computeIRResultFromArea(area) {
+            const normalized = Math.min(Math.max((area - minAreaForIR) / (maxAreaForIR - minAreaForIR), 0), 1);
+            const irValue = Math.round(100 + normalized * 400);
+            const distanceMm = Math.round(sensorRangeMm * (1 - normalized));
+            return { irValue, distanceMm };
+        }
+
+        function processFrame() {
+            if (!isProcessing) return;
+            if (fallbackMode) {
+                const ir = fallbackObjectVisible ? 350 : 0;
+                const area = fallbackObjectVisible ? 22000 : 0;
+                updateReadout(ir, area, fallbackObjectVisible ? { x: 160, y: 90, width: 320, height: 240 } : null);
+                requestAnimationFrame(processFrame);
+                return;
+            }
+
+            if (!video.videoWidth || !video.videoHeight) {
+                requestAnimationFrame(processFrame);
+                return;
+            }
+
+            processingContext.drawImage(video, 0, 0, frameWidth, frameHeight);
+            const frame = processingContext.getImageData(0, 0, frameWidth, frameHeight);
+            const data = frame.data;
+
+            if (!backgroundData) {
+                setStatusMessage('Calibrate the background first to start detection.', 'warning');
+                updateReadout(0, 0, null);
+                requestAnimationFrame(processFrame);
+                return;
+            }
+
+            let motionPixels = 0;
+            let minX = frameWidth, minY = frameHeight, maxX = 0, maxY = 0;
+
+            for (let y = 0; y < frameHeight; y += 2) {
+                for (let x = 0; x < frameWidth; x += 2) {
+                    const index = (y * frameWidth + x) * 4;
+                    const gray = getGrayscale(data, index);
+                    const diff = Math.abs(gray - backgroundData[y * frameWidth + x]);
+
+                    if (diff > diffThreshold) {
+                        motionPixels += 1;
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+
+            const area = motionPixels > 0 && maxX > minX && maxY > minY ? (maxX - minX) * (maxY - minY) : 0;
+            const hasObject = area >= minAreaForIR;
+            const result = hasObject ? computeIRResultFromArea(area) : { irValue: 0, distanceMm: sensorRangeMm };
+            const bbox = hasObject ? { x: minX, y: minY, width: Math.max(maxX - minX, 2), height: Math.max(maxY - minY, 2) } : null;
+
+            updateReadout(result.irValue, area, bbox, result.distanceMm);
+            requestAnimationFrame(processFrame);
+        }
+
+        async function startCamera() {
+            if (fallbackMode) {
+                setStatusMessage('Fallback mode active. Disable simulation to use the camera.', 'warning');
+                return;
+            }
+            if (mediaStream) {
+                setCameraStatus('Camera already started', 'success');
+                return;
+            }
+
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: { width: frameWidth, height: frameHeight }, audio: false });
+                video.srcObject = mediaStream;
+                setCameraStatus('Camera running', 'success');
+                setStatusMessage('Camera started. Calibrate the background and place an object.', 'success');
+                isProcessing = true;
+                requestAnimationFrame(processFrame);
+            } catch (error) {
+                mediaStream = null;
+                setCameraStatus('Camera unavailable', 'error');
+                setStatusMessage('Unable to access camera. Use simulated mode or allow camera permission.', 'error-text');
+                console.error(error);
+            }
+        }
+
+        function stopCamera() {
+            if (!mediaStream) {
+                return;
+            }
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+            video.srcObject = null;
+            setCameraStatus('Camera stopped', 'warning');
+            setStatusMessage('Camera stopped. You can restart it or use simulated mode.', 'warning');
+        }
+
+        function calibrateBackground() {
+            if (fallbackMode) {
+                setStatusMessage('Simulated mode active; no calibration needed.', 'success');
+                return;
+            }
+            if (!video.videoWidth || !video.videoHeight) {
+                setStatusMessage('Wait for the camera to start before calibrating.', 'error-text');
+                return;
+            }
+            processingContext.drawImage(video, 0, 0, frameWidth, frameHeight);
+            const frame = processingContext.getImageData(0, 0, frameWidth, frameHeight);
+            backgroundData = new Float32Array(frameWidth * frameHeight);
+            for (let y = 0; y < frameHeight; y++) {
+                for (let x = 0; x < frameWidth; x++) {
+                    const index = (y * frameWidth + x) * 4;
+                    backgroundData[y * frameWidth + x] = getGrayscale(frame.data, index);
+                }
+            }
+            setStatusMessage('Background calibrated. Place an object in view.', 'success');
+        }
+
+        function toggleFallbackMode() {
+            fallbackMode = !fallbackMode;
+            toggleFallbackButton.classList.toggle('active', fallbackMode);
+            toggleFallbackButton.textContent = fallbackMode ? 'Using Simulated Mode' : 'Use Simulated Mode';
+            if (fallbackMode) {
+                stopCamera();
+                backgroundData = null;
+                setCameraStatus('Simulation active', 'warning');
+                setStatusMessage('Simulated mode active. Use the toggle button below to show or hide an object.', 'success');
+                fallbackObjectVisible = false;
+                updateReadout(0, 0, null);
+            } else {
+                setCameraStatus('Simulation disabled', 'warning');
+                setStatusMessage('Switching back to camera mode. Start the camera and calibrate the background.', 'warning');
+                updateReadout(0, 0, null);
+            }
+        }
+
+        function toggleSimulatedObject() {
+            if (!fallbackMode) {
+                setStatusMessage('Enable simulated mode first.', 'error-text');
+                return;
+            }
+            fallbackObjectVisible = !fallbackObjectVisible;
+            setStatusMessage(fallbackObjectVisible ? 'Simulated object is in view.' : 'No simulated object present.', 'success');
+        }
+
+        function initialize() {
+            overlayCanvas.width = frameWidth;
+            overlayCanvas.height = frameHeight;
+            processingCanvas.width = frameWidth;
+            processingCanvas.height = frameHeight;
+            overlayContext = overlayCanvas.getContext('2d');
+            processingContext = processingCanvas.getContext('2d');
+
+            startCameraButton.addEventListener('click', startCamera);
+            calibrateButton.addEventListener('click', calibrateBackground);
+            toggleFallbackButton.addEventListener('click', toggleFallbackMode);
+
+            const fallbackToggle = document.createElement('button');
+            fallbackToggle.type = 'button';
+            fallbackToggle.className = 'button';
+            fallbackToggle.textContent = 'Show/Hide Simulated Object';
+            fallbackToggle.style.width = '100%';
+            fallbackToggle.style.display = 'none';
+            document.querySelector('.actions').appendChild(fallbackToggle);
+            fallbackToggle.addEventListener('click', toggleSimulatedObject);
+
+            const observer = new MutationObserver(() => {
+                fallbackToggle.style.display = fallbackMode ? 'block' : 'none';
+            });
+            observer.observe(toggleFallbackButton, { attributes: true, attributeFilter: ['class'] });
+
+            setCameraStatus('Ready', 'success');
+            setStatusMessage('Press Start Camera to begin.', 'zero');
+            updateMotorUI();
+        }
+
+        initialize();
+    </script>
+</body>
+</html>
