@@ -1,0 +1,29 @@
+{
+    "name": "Tempearature Monitoring System && Hand Follower",
+    "description": "",
+    "dependencies": {
+        "core": "*",
+        "radio": "*",
+        "microphone": "*",
+        "Untitled": "pkg:Untitled.json",
+        "OLED12864_I2C": "github:makecode-extensions/oled12864_i2c#v1.5.0"
+    },
+    "files": [
+        "main.blocks",
+        "main.ts",
+        "README.md",
+        "Untitled.json",
+        "main.py"
+    ],
+    "testFiles": [
+        "test.ts"
+    ],
+    "targetVersions": {
+        "target": "9.0.8",
+        "targetId": "microbit"
+    },
+    "supportedTargets": [
+        "microbit"
+    ],
+    "preferredEditor": "blocksprj"
+}
